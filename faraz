@@ -1,0 +1,554 @@
+<?php 
+
+
+//Code Snippets from one of my Client Websites for adding custom functionalities in Woocommerce
+
+
+// Display the custom field in the WooCommerce backend
+function display_size_single_page_field() {
+    global $woocommerce, $post;
+    echo '<div class="product_custom_field">';
+    woocommerce_wp_text_input( 
+        array( 
+            'id' => 'display_size_single_page', 
+            'placeholder' => 'Product Size', 
+            'label' => __('Product Size for Single Page', 'woocommerce' ), 
+            'desc_tip' => 'true'
+        )
+    );
+    echo '</div>';
+}
+add_action('woocommerce_product_options_general_product_data', 'display_size_single_page_field');
+
+// Save the custom field value
+function save_size_single_page_field( $post_id ) {
+    $product_size = $_POST['display_size_single_page'];
+    if( !empty( $product_size ) ) {
+        update_post_meta( $post_id, 'display_size_single_page', esc_attr( $product_size ) );
+    }
+}
+
+
+add_action('woocommerce_process_product_meta', 'save_size_single_page_field');
+
+function display_size_single_page_on_frontend( $atts ) {
+    global $post;
+
+    // Get the product object
+    $product = wc_get_product( $post->ID );
+
+    // Check if the product is a Simple product
+    if ( $product->is_type('simple') ) {
+        $product_size = get_post_meta( $post->ID, 'display_size_single_page', true );
+        
+        if( $product_size ) {
+            return '<strong>Size</strong> ' . esc_html( $product_size );
+        }
+    }
+
+    return ''; // Return empty if no value or not a simple product
+}
+add_shortcode( 'display_product_size', 'display_size_single_page_on_frontend' );
+
+
+
+add_filter('woocommerce_product_tabs', 'remove_additional_information_tab', 100, 1);
+
+function remove_additional_information_tab($tabs) {
+    unset($tabs['additional_information']);
+    return $tabs;
+}
+
+function update_order_status_when_shipment_tracking_input( $meta_id, $object_id, $meta_key, $meta_value ){
+    if( $meta_key == '_wc_shipment_tracking_items' ){
+        error_log('update_order_status_when_shipment_tracking_input');
+        $order = wc_get_order( $object_id );
+        if( $order ){
+            $order->update_status( 'completed' );
+        }
+    }
+}
+add_action( 'update_postmeta', 'update_order_status_when_shipment_tracking_input', 10, 4 );
+
+ 
+ // Validate custom field on checkout submission
+function validate_cost_center_field() {
+    $cost_center_code = isset($_POST['billing_cost_center_code']) ? sanitize_text_field($_POST['billing_cost_center_code']) : '';
+
+    // Query the "Cost Center Code" custom post type to check if the code exists
+    $args = array(
+        'post_type'      => 'cost-center-code',
+        'name'           => $cost_center_code,
+        'posts_per_page' => 1,
+    );
+
+    $query = new WP_Query($args);
+
+    // If no matching code found, display an error message
+    if (!$query->have_posts()) {
+        wc_add_notice(__('Invalid Cost Center Code. Please enter a valid code.', 'your-text-domain'), 'error');
+    }
+
+    wp_reset_postdata();
+}
+add_action('woocommerce_after_checkout_validation', 'validate_cost_center_field', 10, 2);
+
+
+
+// Add custom fields to product general options tab
+function add_custom_fields_product_general_options() {
+    global $woocommerce, $post;
+    
+    echo '<div class="options_group">';
+    
+    // ROP field
+    woocommerce_wp_text_input( array(
+        'id' => '_rop_field',
+        'label' => __('ROP', 'woocommerce' ),
+        'placeholder' => '',
+        'desc_tip' => 'true',
+        'description' => __('Enter the ROP value for this product.', 'woocommerce' ),
+        'class' => 'rop-field', // Added class
+    ));
+    
+    // COO field
+    woocommerce_wp_text_input( array(
+        'id' => '_coo_field',
+        'label' => __('COO', 'woocommerce' ),
+        'placeholder' => '',
+        'desc_tip' => 'true',
+        'description' => __('Enter the COO value for this product.', 'woocommerce' ),
+        'class' => 'coo-field', // Added class
+    ));
+    
+    echo '</div>';
+}
+add_action('woocommerce_product_options_general_product_data', 'add_custom_fields_product_general_options');
+
+// Save custom fields data
+function save_custom_fields_product_data( $post_id ) {
+    $rop = $_POST['_rop_field'];
+    $coo = $_POST['_coo_field'];
+    
+    if (!empty($rop)) {
+        update_post_meta( $post_id, '_rop_field', esc_attr( $rop ) );
+    }
+    
+    if (!empty($coo)) {
+        update_post_meta( $post_id, '_coo_field', esc_attr( $coo ) );
+    }
+}
+add_action('woocommerce_process_product_meta', 'save_custom_fields_product_data');
+
+
+
+// Add ROP and COO fields to variation options
+function add_custom_fields_to_variations( $loop, $variation_data, $variation ) {
+    ?>
+    <div class="form-row form-row-first">
+        <label for="_rop_field_<?php echo $loop; ?>"><?php _e('ROP', 'woocommerce' ); ?></label>
+        <span class="woocommerce-help-tip" tabindex="0" aria-label="Enter the ROP value for this variation."></span>
+        <input type="text" class="short wc_input_stock" style="" name="_rop_field_<?php echo $loop; ?>" id="_rop_field_<?php echo $loop; ?>" value="<?php echo esc_attr( get_post_meta( $variation->ID, '_rop_field', true ) ); ?>" placeholder="" step="any">
+    </div>
+    <div class="form-row form-row-last">
+        <label for="_coo_field_<?php echo $loop; ?>"><?php _e('COO', 'woocommerce' ); ?></label>
+        <span class="woocommerce-help-tip" tabindex="0" aria-label="Enter the COO value for this variation."></span>
+        <input type="text" class="short wc_input_stock" style="" name="_coo_field_<?php echo $loop; ?>" id="_coo_field_<?php echo $loop; ?>" value="<?php echo esc_attr( get_post_meta( $variation->ID, '_coo_field', true ) ); ?>" placeholder="" step="any">
+    </div>
+    <?php
+}
+add_action( 'woocommerce_variation_options_pricing', 'add_custom_fields_to_variations', 10, 3 );
+
+// Save custom fields for variations
+function save_custom_fields_variation_data( $variation_id, $i ) {
+    $rop = $_POST['_rop_field_' . $i];
+    $coo = $_POST['_coo_field_' . $i];
+
+    if (!empty($rop)) {
+        update_post_meta( $variation_id, '_rop_field', esc_attr( $rop ) );
+    } else {
+        delete_post_meta( $variation_id, '_rop_field' );
+    }
+
+    if (!empty($coo)) {
+        update_post_meta( $variation_id, '_coo_field', esc_attr( $coo ) );
+    } else {
+        delete_post_meta( $variation_id, '_coo_field' );
+    }
+}
+add_action( 'woocommerce_save_product_variation', 'save_custom_fields_variation_data', 10, 2 );
+
+// Save custom fields data to order item meta
+function save_custom_fields_to_order_item_meta( $item_id, $values, $cart_item_key ) {
+    $rop = isset( $values['_rop_field'] ) ? sanitize_text_field( $values['_rop_field'] ) : '';
+    $coo = isset( $values['_coo_field'] ) ? sanitize_text_field( $values['_coo_field'] ) : '';
+
+    if ( ! empty( $rop ) ) {
+        wc_add_order_item_meta( $item_id, '_rop_field', $rop );
+    }
+
+    if ( ! empty( $coo ) ) {
+        wc_add_order_item_meta( $item_id, '_coo_field', $coo );
+    }
+}
+add_action( 'woocommerce_checkout_create_order_line_item', 'save_custom_fields_to_order_item_meta', 10, 3 );
+
+
+add_filter( 'woocommerce_form_field' , 'elex_remove_checkout_optional_text', 10, 4 );
+function elex_remove_checkout_optional_text( $field, $key, $args, $value ) {
+if( is_checkout() && ! is_wc_endpoint_url() ) {
+$optional = '&nbsp;<span class="optional">(' . esc_html__( 'optional', 'woocommerce' ) . ')</span>';
+$field = str_replace( $optional, '', $field );
+}
+return $field;
+} 
+
+
+
+// Another Custom Code Client' site, This is to create custom Workout using ACF and custom design from front. Very complex ACF backend. 
+
+// Exit if accessed directly
+if ( !defined( 'ABSPATH' ) ) exit;
+
+// BEGIN ENQUEUE PARENT ACTION
+// AUTO GENERATED - Do not modify or remove comment markers above or below:
+
+if ( !function_exists( 'chld_thm_cfg_locale_css' ) ):
+    function chld_thm_cfg_locale_css( $uri ){
+        if ( empty( $uri ) && is_rtl() && file_exists( get_template_directory() . '/rtl.css' ) )
+            $uri = get_template_directory_uri() . '/rtl.css';
+        return $uri;
+    }
+endif;
+add_filter( 'locale_stylesheet_uri', 'chld_thm_cfg_locale_css' );
+
+if ( !function_exists( 'child_theme_configurator_css' ) ):
+    function child_theme_configurator_css() {
+        wp_enqueue_style( 'chld_thm_cfg_child', trailingslashit( get_stylesheet_directory_uri() ) . 'style.css', array( 'hello-elementor','hello-elementor','hello-elementor-theme-style' ) );
+
+        $post_type = get_post_type();
+        if ( $post_type == 'training' ) {
+            wp_enqueue_style('bootstrap', get_template_directory_uri() . '-child/assets/css/libraries/bootstrap/bootstrap.min.css', array(), '1.0.0', 'all');
+            wp_enqueue_style('home', get_template_directory_uri() . '-child/assets/scss/pages/home.css', array(), '1.0.0', 'all');
+
+            wp_enqueue_script('jquery', get_template_directory_uri() . '-child/assets/js/libraries/jquery/jquery-3.6.4.min.js', array('jquery'), '1.0.0', true);
+            wp_enqueue_script('bootstrap', get_template_directory_uri() . '-child/assets/js/libraries/bootstrap/bootstrap.bundle.min.js', array('jquery'), '1.0.0', true);
+            wp_enqueue_script('home', get_template_directory_uri() . '-child/assets/js/pages/home.js', array('jquery'), '1.0.19', true);
+
+            wp_localize_script('my-script', 'my_ajax_object', array(
+                'ajax_url' => admin_url('admin-ajax.php')
+            ));
+        }
+        if ( is_page( 'signup' ) ) {
+            wp_enqueue_style( 'bootstrap_child', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/css/libraries/bootstrap/bootstrap.min.css', array( 'hello-elementor','hello-elementor','hello-elementor-theme-style' ) );
+            wp_enqueue_style( 'home_child', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/scss/pages/auth.css', array( 'hello-elementor','hello-elementor','hello-elementor-theme-style' ) );
+
+            wp_enqueue_script('jquery-child', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/js/libraries/jquery/jquery-3.6.4.min.js');
+            wp_enqueue_script( 'jquery-validate', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/js/libraries/jquery/jquery.validate.min.js', array(), '1.0', false );
+            wp_enqueue_script('bootstrap-child', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/js/libraries/bootstrap/bootstrap.bundle.min.js');
+            wp_enqueue_script('signup', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/js/pages/signup.js');
+        }
+    }
+endif;
+add_action( 'wp_enqueue_scripts', 'child_theme_configurator_css', 100 );
+// END ENQUEUE PARENT ACTION
+
+
+//Dashboard scripts ====
+function custom_admin_styles() {
+    global $post_type, $post;
+    if ( $post_type == 'training' && $post->post_type == 'training' ) {
+        wp_enqueue_style( 'custom-admin', get_template_directory_uri() . '-child/assets/scss/admin/admin-style.css' );
+        wp_enqueue_script('custom-admin', trailingslashit( get_stylesheet_directory_uri() ) . '/assets/js/admin/admin.js');
+    }
+    
+}
+add_action( 'admin_enqueue_scripts', 'custom_admin_styles' );
+
+
+
+//Insert Table Data ====
+function insert_table_data() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'workout'; // replace with your table name
+    $data = array(
+        'user' => $_POST['user_id'],
+        'week' => $_POST['week_id'],
+        'tab' => $_POST['tab_id'],
+        'row' => $_POST['row_id'],
+        'checkbox' => $_POST['check'],
+        'post' => $_POST['post_id'],
+    );
+    $wpdb->insert( $table_name, $data );
+    $insert_id = $wpdb->insert_id; // Get the ID of the inserted row
+
+    // Send the insert ID as a JSON response
+    // Create an array with all the IDs
+    $response = array(
+        'insert_id' => $insert_id,
+        'user_id' => $_POST['user_id'],
+        'week_id' => $_POST['week_id'],
+        'tab_id' => $_POST['tab_id'],
+        'row_id' => $_POST['row_id'],
+        'checkbox_id' => $_POST['check'],
+        'post' => $_POST['post_id'],
+    );
+
+    // Send the IDs as a JSON response
+    wp_send_json( $response );
+
+    wp_die();
+}
+add_action( 'wp_ajax_insert_table_data', 'insert_table_data' );
+add_action( 'wp_ajax_nopriv_insert_table_data', 'insert_table_data' );
+
+
+// Update User Difficulty
+
+add_action('wp_ajax_update_user_difficulty_table_data', 'update_user_difficulty_table_data');
+add_action('wp_ajax_nopriv_update_user_difficulty_table_data', 'update_user_difficulty_table_data');
+function update_user_difficulty_table_data() {
+    // Get the data sent via AJAX
+
+    update_user_meta($_POST['userid'], 'mepr_difficulty', $_POST['difficultyLevel']);
+
+
+    // // Prepare the response data
+    $response = array(
+        'insert_id' => $_POST['difficultyLevel'],
+    );
+
+    // Send the IDs as a JSON response
+    wp_send_json( $response );
+    wp_die();
+}
+
+
+// Get Selected Week Completed Days
+
+add_action( 'wp_ajax_fetch_selected_week_completed_days', 'fetch_selected_week_completed_days' );
+add_action( 'wp_ajax_nopriv_fetch_selected_week_completed_days', 'fetch_selected_week_completed_days' );
+function fetch_selected_week_completed_days() {
+    global $wpdb;
+    $user_id = $_POST['user_id'];
+    $post_id = $_POST['post_id'];
+    $week = $_POST['week'];
+    $table_name = $wpdb->prefix . 'workout';
+    $results = $wpdb->get_results("SELECT * FROM $table_name WHERE `post` = $post_id AND `user` = $user_id AND `week` = $week" );
+    wp_send_json( $results );
+    wp_die();
+}
+
+add_action( 'wp_ajax_fetch_selected_completed_week', 'fetch_selected_completed_week' );
+add_action( 'wp_ajax_nopriv_fetch_selected_completed_week', 'fetch_selected_completed_week' );
+function fetch_selected_completed_week() {
+    global $wpdb;
+    $user_id = $_POST['user_id'];
+    $post_id = $_POST['post_id'];
+    $week = $_POST['week'];
+    $table_name = $wpdb->prefix . 'week';
+    $results = $wpdb->get_results("SELECT * FROM $table_name WHERE `post` = $post_id AND `user` = $user_id AND `week` = $week" );
+    wp_send_json( $results );
+    wp_die();
+}
+
+//Update Table Data ====
+
+function update_table_data() {
+    // Get the data sent via AJAX
+    $id = $_POST['id'];
+    $user_id = $_POST['user_id'];
+    $week_id = $_POST['week_id'];
+    $tab_id = $_POST['tab_id'];
+    $row_id = $_POST['row_id'];
+    $check = $_POST['check'];
+    $post = $_POST['post_id'];
+
+    // Update the table based on the provided ID
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'workout'; // Replace 'your_table_name' with the actual table name
+    $data = array(
+        'user' => $user_id,
+        'week' => $week_id,
+        'tab' => $tab_id,
+        'row' => $row_id,
+        'checkbox' => $check,
+        'post' => $post,
+    );
+    $where = array('id' => $id);
+    $wpdb->update($table_name, $data, $where);
+
+    // Prepare the response data
+    $response = array(
+        'insert_id' => $id,
+        'user_id' => $_POST['user_id'],
+        'week_id' => $_POST['week_id'],
+        'tab_id' => $_POST['tab_id'],
+        'row_id' => $_POST['row_id'],
+        'checkbox_id' => $_POST['check'],
+        'post' => $_POST['post_id'],
+    );
+
+    // Send the IDs as a JSON response
+    wp_send_json( $response );
+    wp_die();
+}
+add_action( 'wp_ajax_update_table_data', 'update_table_data' );
+add_action( 'wp_ajax_nopriv_update_table_data', 'update_table_data' );
+
+
+//Fetch Table Data ====
+
+add_action( 'wp_ajax_fetch_table_data', 'fetch_table_data' );
+add_action( 'wp_ajax_nopriv_fetch_table_data', 'fetch_table_data' );
+function fetch_table_data() {
+    global $wpdb;
+    $user_id = $_POST['user_id'];
+    $table_name = $wpdb->prefix . 'workout';
+    $results = $wpdb->get_results( "SELECT * FROM $table_name WHERE user = $user_id" );
+    wp_send_json( $results );
+    wp_die();
+}
+
+
+//Fetch Week Table Data ====
+add_action( 'wp_ajax_fetch_week', 'fetch_week' );
+add_action( 'wp_ajax_nopriv_fetch_week', 'fetch_week' );
+function fetch_week() {
+    global $wpdb;
+    $user_id = $_POST['user_id'];
+    $table_name = $wpdb->prefix . 'week';
+    $results = $wpdb->get_results( "SELECT * FROM $table_name WHERE user = $user_id ORDER BY week DESC" );
+    $reversed_results = array_reverse($results);
+    wp_send_json( $reversed_results );
+    wp_die();
+}
+
+
+//Signup Form Check ===
+
+function redirect_after() {
+    // Check if the user has just submitted the form
+    if ( is_page('signup') ) {
+        if ( is_user_logged_in() ) {
+            wp_redirect( home_url() );
+        }
+    }
+}
+add_action( 'template_redirect', 'redirect_after' );
+
+
+//Signup Form Check ===
+
+add_action('wp_ajax_custom_register', 'custom_register');
+add_action('wp_ajax_nopriv_custom_register', 'custom_register');
+
+function custom_register() {
+    $first_name = sanitize_text_field($_POST['first_name']);
+    $last_name = sanitize_text_field($_POST['last_name']);
+    $email = $_POST['email'];
+    $password = $_POST['password'];
+    $level = $_POST['level'];
+
+    // Generate a unique username
+    $email_parts = explode('@', $email);
+    $username = $email_parts[0] . $email_parts[1];
+
+
+    // Check if the user already exists
+    if (username_exists($username) || email_exists($email)) {
+        $response = array(
+            'success' => false,
+            'message' => 'User already exists'
+        );
+        wp_send_json($response);
+        exit;
+    }
+
+    // Create the new user
+    $user_id = wp_create_user($username, $password, $email);
+    // Check if the user was created successfully
+    if (is_wp_error($user_id)) {
+
+        $response = array(
+            'success' => false,
+            'message' => $user_id->get_error_message()
+        );
+        wp_send_json($response);
+        exit;
+    }
+
+    // Update user meta with first name and last name
+    update_user_meta($user_id, 'first_name', $first_name);
+    update_user_meta($user_id, 'last_name', $last_name);
+
+//    update_field('select', $level, 'user_'.$user_id);
+
+    update_field('mepr_difficulty', $level, 'user_'.$user_id);
+
+
+    // User registration was successful
+    $response = array(
+        'success' => true,
+        'message' => 'User registered successfully'
+    );
+    $user = get_user_by('id', $user_id);
+    wp_set_current_user($user_id, $user->user_login);
+    wp_set_auth_cookie($user_id);
+    do_action('wp_login', $user->user_login, $user);
+    wp_send_json($response);
+    exit;
+}
+
+
+//Week Update ===
+
+add_action('wp_ajax_week_update', 'week_update');
+add_action('wp_ajax_nopriv_week_update', 'week_update');
+
+function week_update() {
+    $user = $_POST['user'];
+    $week = $_POST['week'];
+    $post = $_POST['post'];
+
+    // Check if the record already exists
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'week'; // Replace 'your_table_name' with the actual table name
+    $existing_record = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM $table_name WHERE user = %d AND week = %s AND post = %d",
+            $user,
+            $week,
+            $post
+        )
+    );
+
+    if ($existing_record) {
+        // Record already exists
+        $response = array(
+            'message' => 'already exists.',
+            'existing_record' => $existing_record,
+        );
+    } else {
+        // Insert the new row
+        $data = array(
+            'user' => $user,
+            'week' => $week,
+            'post' => $post,
+        );
+        $wpdb->insert($table_name, $data);
+        $insert_id = $wpdb->insert_id; // Get the ID of the inserted row
+
+        $response = array(
+            'id' => $insert_id,
+            'user' => $user,
+            'week' => $week,
+            'post' => $post,
+        );
+    }
+
+    // Send the response as JSON
+    wp_send_json($response);
+
+    wp_die();
+}
